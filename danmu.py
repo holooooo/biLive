@@ -8,9 +8,10 @@ Created on Mon Jul 24 13:53:57 2017
 每个问题会等待10秒来接受玩家的选择。内容：选择{名字}
 游戏界面包含以下要素：题目，bgm名，年龄，性别，问题，选项，游戏轮次，历史游戏结果
 bgm音频流和数据视频流是两个流，在最后合并起来
+防止被人输入不存在的选项给炸了
 """
 
-import time, os, json
+import time, os, json, threading, random
 from selenium import webdriver
 import pymysql
 import requests
@@ -26,19 +27,16 @@ def connDb():
      'charset':'utf8',
      }
     db = pymysql.connect(**config)
-    print('数据库连接成功')
     return db
 
 
-
-    
-
 class danmu(object):
     def __init__(self, uid, nickname, text, timeline):
-        self.__uid = uid
-        self.__nickname = nickname
-        self.__text = text
-        self.__timeline = timeline
+        self.uid = uid
+        self.nickname = nickname
+        self.text = text
+        self.timeline = timeline
+        self.eid = 0
         
     def getDanmu(roomId):
         #爬取某个房间弹幕（准确的说是得到)，返回的是一个由十个弹幕组成的弹幕数组
@@ -60,6 +58,8 @@ class danmu(object):
             text = str(x['text'])
             timeline = str(x['timeline'])
             newDanmu = danmu(uid, nickname, text, timeline)
+            if game.getEid() != 0:
+                newDanmu.eid = game.getEid()
             result.append(newDanmu)
         return result
     
@@ -69,45 +69,86 @@ class danmu(object):
         db = connDb()
         print('数据库连接成功')
         cursor = db.cursor()
-        sql = ('INSERT INTO danmu (uid, nickname, text, timeline) values ("%s","%s","%s","%s")'%
-               (self.__uid, self.__nickname, self.__text, self.__timeline))
-        print(self.__uid, self.__nickname, self.__text, self.__timeline)
+        if self.eid != 0:
+            sql = ('INSERT INTO danmu (uid, nickname, text, timeline, gid) values ("%s","%s","%s","%s","%s")'%
+               (self.uid, self.nickname, self.text, self.timeline, self.eid))
+        else:
+            sql = ('INSERT INTO danmu (uid, nickname, text, timeline) values ("%s","%s","%s","%s")'%
+               (self.uid, self.nickname, self.text, self.timeline))
         #检查弹幕是否重复
         try:
-            sqlCheck = 'SELECT * FROM danmu WHERE timeline = "%s" and uid = "%s"'%(self.__timeline, self.__uid) 
+            sqlCheck = 'SELECT * FROM danmu WHERE timeline = "%s" and uid = "%s"'%(self.timeline, self.uid) 
             cursor.execute(sqlCheck)
-            if cursor.fetchone() != None:
-                print('该弹幕已存在')
-            else:
+            if cursor.fetchone() == None:
                 print(baocuo)
         except:
             try:
                 cursor.execute(sql)
                 db.commit()
-                print('写入一行数据')
             except:
                 db.rollback()
-                print('写入失败')
         finally:
             db.close()
-            print('关闭数据库连接')
+            
+            
+    def run(roomid):
+        while 1:
+            for x in danmu.getDanmu(roomid):
+                x.saveDanmu()
+            time.sleep(1)
             
     
     def checkDanmuCommand(self):         
-        if self.__text.find('选择') != -1 and self.__text[-1].isdigit():
-            choice = int(self.__text[-1])
+        if self.text.find('选择') != -1 and self.text[-1].isdigit():
+            choice = int(self.text[-1])
             return ['choice', choice]
-        if self.__text.find('名字') != -1:
-            name = self.__text[2:]
+        if self.text.find('名字') != -1:
+            name = self.text[2:]
             return ['name', name]
         return None
-
     
-class role(object):
+    
+    def statsChoice():
+        choice = []
+        finChoice = []
+        eid = game.getEid()
+        db = connDb()
+        cursor = db.cursor()
+        sql = 'SELECT choice FROM event WHERE eid = "%s"'%(eid)
+        cursor.execute(sql)
+        choiceLen = len(cursor[0][0].split(','))
+        sql = 'SELECT text FROM danmu WHERE eid = "%s"'%(eid)
+        cursor.execute(sql)
+        for x in cursor:
+            if x[0][0:2] == '选择' and x[0][-1].isdigit():
+                if x[0][-1] <= choiceLen and x[0][-1] != 0:
+                    choice.append(x[0][2:])
+        for x in range(1,choiceLen):
+            finChoice.append(choice.count(x))
+        choice = finChoice.index(max(finChoice))
+        return choice
+    
+  
+    def statsName():
+        name = []
+        eid = game.getEid()
+        db = connDb()
+        cursor = db.cursor()
+        sql = 'SELECT text FROM danmu WHERE eid = "%s"'%(eid)
+        cursor.execute(sql)
+        for x in cursor:
+            if x[0][0:2] == '名字':
+                name.append(x[0][2:])
+        rand = random.randint(0, len(name)-1)
+        name = name[rand]
+        return name
+    
+            
+class role(object): 
     def __init__(self, name, age, sex, lifeRoad, roleState, bgState):
         self.name = name
         self.age = age
-        self.sex = sex
+        self.sex = sex  
         self.lifeRoad = lifeRoad
         self.roleState = roleState
         self.bgState = bgState
@@ -115,6 +156,18 @@ class role(object):
     
     def saveRole(self):
         #存储用户信息
+        db = connDb()
+        cursor = db.cursor()
+        sql = ('INSERT INTO role (name, age, sex, lifeRoad, roleState, bgState) VALUES ("%s", "%s", "%s", "%s", "%s", "%s");'% 
+                (self.name, self.age, self.sex, self.lifeRoad, self.roleState, self.bgState))
+        try:
+            cursor.execute(sql)
+            db.commit()
+        except:
+            db.rollback()
+        finally:
+            db.close()
+            
         return 'todo'
     
 
@@ -147,7 +200,7 @@ class game(object):
         return status
     
     
-    def choice(self,choice):
+    def choice(self, choice):
         js = 'game.userSelect(' + choice + ')'
         self.driver.execute_script(js)
     
@@ -185,6 +238,32 @@ class game(object):
         return [title, content, choice]
     
     
+    def saveEvent(self, event):
+        db = connDb()
+        cursor = db.cursor()
+        choice = ''
+        if event != "name":
+            for x in event.choice:
+                choice += x + ','
+            sql = ('INSERT INTO event (title, content, choice) VALUES ("%s", "%s", "%s")'%
+                   (event.title, event.content, choice))
+        else:
+            sql = ('INSERT INTO event (title, content) VALUES ("%s", "%s")'%
+                   ('命名', '起名字'))
+        try:
+            cursor.execute(sql)
+            db.commit()
+        except:
+            db.rollback()
+        finally:
+            db.close()
+    
+    
+    def alive(self):
+        #检测玩家是否存活
+        return 'todo'
+    
+    
     def gameOver(self, role):
         #结束游戏，统计数据并存入数据库
         self.driver.quit()
@@ -194,9 +273,19 @@ class game(object):
     def getHistoryGame(self):
         #从数据库取得历史游戏排行榜
         return 'todo'
+    
+    
+    def getEid():
+        db = connDb()
+        cursor = db.cursor()
+        sql = 'SELECT MAX(eid) FROM event;'
+        cursor.execute(sql)
+        for x in cursor:
+            eid = x[0]
+        return eid
 
 
-def getPic():
+def getPic(status, *arg):
     #输出画面，并且一直刷新，一秒刷新一次
     return 'todo'
 
@@ -209,16 +298,31 @@ def getVideo():
     return 'todo'
 
 
-
-try:
-    #game = game()
-    #game.gameStart("姚明")
-    #game.getStatus()
-    #game.gameOver(game.getStatus())
-    while 1:
-        newdanmu = danmu.getDanmu(44515)
-        for x in newdanmu:
-            danmu.saveDanmu(x)
-        time.sleep(1)
-except KeyboardInterrupt:
-    print('程序已退出')
+def main():
+    try:
+        danmuThead = threading.Thread(target = danmu.run(44515))
+        danmuThead.start()
+        while 1:
+            newGame = game()
+            getPic('index')
+            newGame.saveEvent('name')
+            time.sleep(10)
+            name = danmu.statsName()
+            newGame.gameStart(name)
+            while newGame.alive():
+                event = newGame.getEvent()
+                status = newGame.getStatus()
+                hisGame = newGame.getHistoryGame()
+                newGame.saveEvent(event)
+                getPic('happen', event, status, hisGame)
+                time.sleep(10)
+                choice = danmu.statsChoice()
+                newGame.choice(choice)
+            status.saveRole()
+            getPic('over')
+            newGame.gameOver()
+            time.sleep(5)
+    except KeyboardInterrupt:
+        print('程序已退出')
+        
+main()
