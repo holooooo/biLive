@@ -47,7 +47,7 @@ class danmu(object):
         tempdanmu = json.loads(tempdanmu.text, encoding='utf-8')
         tempdanmu = tempdanmu['data']['room']
         if len(tempdanmu) == 0:
-            print('房间号有误，请重新输入')
+            print('房间号有误，请检查后重新启动')
             sys.exit(0) 
         result = []
         for x in tempdanmu:
@@ -81,6 +81,7 @@ class danmu(object):
             
             
     def run(roomid):
+        #瞎jb跑起来
         while 1:
             for x in danmu.getDanmu(roomid):
                 x.checkDanmuCommand()
@@ -88,56 +89,63 @@ class danmu(object):
             time.sleep(1)
             
     
-    def checkDanmuCommand(self,command):   
+    def checkDanmuCommand(self,command): 
+        #处理弹幕数据，提出弹幕命令
         if command == 'choice':
             if self.text.find('选择') != -1 and self.text[-1].isdigit():
                 choice = int(self.text[-1]) - 1
-                return choice
+                return [self.nickname, choice]
         elif command == 'name':
             if self.text.find('名字') != -1:
                 name = self.text[2:]
-                return name
+                return [self.nickname, name]
         return None
     
     
-    def statsChoice(roomid):
-        print('正在统计选择，统计大概进行15秒，请耐心等待')
-        choiceList = []
-        for i in range(15):
-            for x in danmu.getDanmu(roomid):
-                choice = x.checkDanmuCommand('choice')
-                if choice != None:
-                    choiceList.append(choice)
-            time.sleep(1)
-        if len(choiceList) == 0:
-            print('因为样本数不足，所以默认选择第一个选项')
-            return 0
-        else:
-            choice = Counter(choiceList)[0][0] - 1
-        print('大家选择了第' + str(choice+1) + '个选项')
-        return choice
-    
-  
-    def statsName(roomid):
-        print('正在统计名字，统计大概进行15秒，请耐心等待')
-        nameList = []
-        for i in range(15):
-            for x in danmu.getDanmu(roomid):
-                name = x.checkDanmuCommand('name')
-                if name != None:
-                    nameList.append(name)
-            time.sleep(1)
-        if len(nameList) == 0:
-            print('因为样本数不足，所以默认名字为凤凰院凶真')
-            name = '凤凰院凶真'
+    def stats(roomid,command):
+        #统计弹幕命令，并且输出结果
+        if command == 'choice':
+            print('正在统计选择，统计大概进行15秒，请耐心等待')
+            choiceList = []
+            namePool = []
+            for i in range(15):
+                for x in danmu.getDanmu(roomid):
+                    choice = x.checkDanmuCommand('choice')
+                    if choice != None and choice[0] not in namePool:
+                        namePool.append(choice[0])
+                        choiceList.append(choice[1])
+                time.sleep(1)
+            if len(choiceList) == 0:
+                print('因为样本数不足，所以默认选择第一个选项')
+                return 0
+            else:
+                choice = Counter(choiceList)[0][0] - 1
+            print('大家选择了第' + str(choice+1) + '个选项')
+            return choice
+        elif command == 'name':
+            print('正在统计名字，统计大概进行15秒，请耐心等待')
+            nameList = []
+            namePool = []
+            for i in range(15):
+                for x in danmu.getDanmu(roomid):
+                    name = x.checkDanmuCommand('name')
+                    if name != None and name[0] not in namePool:
+                        namePool.append(name[0])
+                        nameList.append(name[1])
+                time.sleep(1)
+            if len(nameList) == 0:
+                print('因为样本数不足，所以默认名字为凤凰院凶真')
+                name = '凤凰院凶真'
+                return name
+            rand = random.randrange(0, len(nameList))
+            name = nameList[rand]
+            print('随机选择的名字是' + name)
             return name
-        rand = random.randrange(0, len(nameList)-1)
-        name = nameList[rand]
-        print('随机选择的名字是' + name)
-        return name
-    
+        
             
 class role(object): 
+    #这个类需要处理更多的数据才能用，暂时懒得写了
+    #todo
     def __init__(self, name, age, sex, lifeRoad, roleState, bgState):
         self.name = name
         self.age = age
@@ -164,14 +172,15 @@ class role(object):
     
 
 class game(object):
-    def __init__(self):
+    def __init__(self, roomid):
+        self.roomid = roomid
         option = webdriver.ChromeOptions()
         option.add_argument('--app=http://www.msgjug.com/p_life/page.html')
         self.driver = webdriver.Chrome(chrome_options=option)
     
     
     def getStatus(self):
-        #爬取目前状况
+        #爬取目前状况，目前好像没用了。。
         name = self.driver.find_element_by_id('gameRoleName')
         age = self.driver.find_element_by_id('gameRoleAge')
         sex = self.driver.find_element_by_id('gameRoleSex')
@@ -192,15 +201,16 @@ class game(object):
     
     
     def choice(self):
-        choice = danmu.statsChoice(roomid)
+        #选择事件函数
+        choice = danmu.stats(self.roomid, 'choice')
         js = 'game.userSelect(' + str(choice) + ')'
         self.driver.execute_script(js)
     
    
-    def gameStart(self, i, roomid):
+    def gameStart(self, i):
         #重新开始游戏，开始调用getQuestion,并且从弹幕中随机挑选一个名字.如果不行就再还一个，直到名字满意为止
         print('游戏开始,当前为第' + str(i) + '轮')
-        name = danmu.statsName(roomid)
+        name = danmu.stats(self.roomid,'name')
         print('名字为' + name)
         getGameStart = 'game.changeState("game")'
         newRole = 'newRole()'
@@ -258,6 +268,7 @@ class game(object):
         left = self.driver.find_element_by_id('overLeftTop')
         age = left.find_element_by_tag_name('span').text[:-1]
         if age == 'undefine':
+            print('很惭愧，这局游戏崩溃了')
             age = 0
         death = left.find_element_by_tag_name('h2').text
         db = connDb()
@@ -272,6 +283,7 @@ class game(object):
         finally:
             db.close()
             bury = 'B站弹幕版逗比人生'
+            time.sleep(7)
             self.driver.find_element_by_id('deadSay').send_keys(bury)
             self.driver.execute_script('game.bury()')
             self.driver.refresh()
@@ -279,16 +291,19 @@ class game(object):
             print('文明的种子仍在，它将重新启动，再次开始在三体世界中命运莫测的进化，欢迎您再次登录。')
             print('--------------------------------------------------------')
     
-try:
-    i = 1
-    roomid = 3742025
-    newGame = game()
-    while 1:
-        newGame.gameStart(i,roomid)
-        while newGame.alive():
-            newGame.choice()
-        newGame.gameOver(i)
-        i += 1
-except KeyboardInterrupt:
-    sys.exit()
-    print('程序已退出')
+    
+def main():
+    try:
+        i = 1
+        newGame = game(3742025)
+        while 1:
+            newGame.gameStart(i)
+            while newGame.alive():
+                newGame.choice()
+            newGame.gameOver(i)
+            i += 1
+    except KeyboardInterrupt:
+        sys.exit()
+        print('程序已退出')
+        
+main()
