@@ -49,3 +49,5 @@ debug.log
 *.log
 *.log
 !*.py
+*.gitignore
+*.gitattributes
