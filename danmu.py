@@ -105,10 +105,10 @@ class danmu(object):
     def stats(roomid,command):
         #统计弹幕命令，并且输出结果
         if command == 'choice':
-            print('正在统计选择，统计大概进行15秒，请耐心等待')
+            print('正在统计选择，统计大概进行10秒，请耐心等待')
             choiceList = []
             namePool = []
-            for i in range(15):
+            for i in range(10):
                 for x in danmu.getDanmu(roomid):
                     choice = x.checkDanmuCommand('choice')
                     if choice != None and choice[0] not in namePool:
@@ -118,8 +118,9 @@ class danmu(object):
             if len(choiceList) == 0:
                 print('因为样本数不足，所以默认选择第一个选项')
                 return 0
-            else:
-                choice = Counter(choiceList)[0][0] - 1
+            for x in choiceList:
+                print('选择'+x)
+            choice = Counter(choiceList)[0][0] - 1
             print('大家选择了第' + str(choice+1) + '个选项')
             return choice
         elif command == 'name':
@@ -137,6 +138,8 @@ class danmu(object):
                 print('因为样本数不足，所以默认名字为凤凰院凶真')
                 name = '凤凰院凶真'
                 return name
+            for x in nameList:
+                print('名字'+x)
             rand = random.randrange(0, len(nameList))
             name = nameList[rand]
             print('随机选择的名字是' + name)
@@ -289,7 +292,7 @@ class game(object):
             self.driver.refresh()
             print('游戏结束,第' + str(i) + '号观测者死于' + death +'。该观测者成长到了' + str(age) + '岁')
             print('文明的种子仍在，它将重新启动，再次开始在三体世界中命运莫测的进化，欢迎您再次登录。')
-            print('--------------------------------------------------------')
+            print('---------------------------------------------------')
     
     
 def main():
