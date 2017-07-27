@@ -6,7 +6,7 @@ Created on Mon Jul 24 13:53:57 2017
 
 """
 
-import time, os, json, random
+import time, sys, json, random
 from selenium import webdriver
 import pymysql
 import requests
@@ -48,7 +48,7 @@ class danmu(object):
         tempdanmu = tempdanmu['data']['room']
         if len(tempdanmu) == 0:
             print('房间号有误，请重新输入')
-            os._exit(0)
+            sys.exit(0) 
         result = []
         for x in tempdanmu:
             uid = int(x['uid'])
@@ -75,7 +75,7 @@ class danmu(object):
                     cursor.execute(sql)
                     db.commit()
                 except:
-                    db.rollback()          
+                    db.rollback()
         finally:
             db.close()
             
@@ -103,7 +103,7 @@ class danmu(object):
     def statsChoice(roomid):
         print('正在统计选择，统计大概进行15秒，请耐心等待')
         choiceList = []
-        for i in range(2):
+        for i in range(15):
             for x in danmu.getDanmu(roomid):
                 choice = x.checkDanmuCommand('choice')
                 if choice != None:
@@ -121,7 +121,7 @@ class danmu(object):
     def statsName(roomid):
         print('正在统计名字，统计大概进行15秒，请耐心等待')
         nameList = []
-        for i in range(2):
+        for i in range(15):
             for x in danmu.getDanmu(roomid):
                 name = x.checkDanmuCommand('name')
                 if name != None:
@@ -160,14 +160,14 @@ class role(object):
             db.rollback()
         finally:
             db.close()
-            
         return 'todo'
     
 
 class game(object):
     def __init__(self):
-        self.driver = webdriver.Chrome()
-        self.driver.get('http://www.msgjug.com/p_life/page.html')
+        option = webdriver.ChromeOptions()
+        option.add_argument('--app=http://www.msgjug.com/p_life/page.html')
+        self.driver = webdriver.Chrome(chrome_options=option)
     
     
     def getStatus(self):
@@ -191,15 +191,16 @@ class game(object):
         return status
     
     
-    def choice(self, choice):
+    def choice(self):
+        choice = danmu.statsChoice(roomid)
         js = 'game.userSelect(' + str(choice) + ')'
         self.driver.execute_script(js)
     
    
-    def gameStart(self, i):
+    def gameStart(self, i, roomid):
         #重新开始游戏，开始调用getQuestion,并且从弹幕中随机挑选一个名字.如果不行就再还一个，直到名字满意为止
         print('游戏开始,当前为第' + str(i) + '轮')
-        name = danmu.statsName(1560442)
+        name = danmu.statsName(roomid)
         print('名字为' + name)
         getGameStart = 'game.changeState("game")'
         newRole = 'newRole()'
@@ -255,12 +256,14 @@ class game(object):
         #结束游戏，统计数据并存入数据库
         name = self.driver.find_element_by_id('overName').text
         left = self.driver.find_element_by_id('overLeftTop')
-        age = left.find_element_by_tag_name('span').text
+        age = left.find_element_by_tag_name('span').text[:-1]
+        if age == 'undefine':
+            age = 0
         death = left.find_element_by_tag_name('h2').text
         db = connDb()
         cursor = db.cursor()
         sql = ('INSERT INTO user (name, age, death) VALUES ("%s", "%s", "%s")'%
-               (name, age, death))
+               (name, int(age), death))
         try:
             cursor.execute(sql)
             db.commit()
@@ -272,20 +275,20 @@ class game(object):
             self.driver.find_element_by_id('deadSay').send_keys(bury)
             self.driver.execute_script('game.bury()')
             self.driver.refresh()
-            print('游戏结束,第' + str(i) + '号观测者死于' + death +'。该观测者成长到了' + str(age))
+            print('游戏结束,第' + str(i) + '号观测者死于' + death +'。该观测者成长到了' + str(age) + '岁')
             print('文明的种子仍在，它将重新启动，再次开始在三体世界中命运莫测的进化，欢迎您再次登录。')
             print('--------------------------------------------------------')
     
 try:
     i = 1
+    roomid = 3742025
     newGame = game()
     while 1:
-        newGame.gameStart(i)
+        newGame.gameStart(i,roomid)
         while newGame.alive():
-            choice = danmu.statsChoice(1560442)
-            newGame.choice(0)
-            time.sleep(1)
+            newGame.choice()
         newGame.gameOver(i)
         i += 1
 except KeyboardInterrupt:
+    sys.exit()
     print('程序已退出')
