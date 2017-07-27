@@ -6,7 +6,7 @@ Created on Mon Jul 24 13:53:57 2017
 
 """
 
-import time, os, json, threading, random
+import time, os, json, random
 from selenium import webdriver
 import pymysql
 import requests
@@ -71,13 +71,11 @@ class danmu(object):
             sqlCheck = 'SELECT * FROM danmu WHERE timeline = "%s" and uid = "%s"'%(self.timeline, self.uid) 
             cursor.execute(sqlCheck)
             if cursor.fetchone() == None:
-                print(baocuo)
-        except:
-            try:
-                cursor.execute(sql)
-                db.commit()
-            except:
-                db.rollback()
+                try:
+                    cursor.execute(sql)
+                    db.commit()
+                except:
+                    db.rollback()          
         finally:
             db.close()
             
@@ -103,7 +101,7 @@ class danmu(object):
     
     
     def statsChoice(roomid):
-        print('正在统计选择,请在弹幕中发送以“选择”开头的弹幕，统计大概进行15秒，请耐心等待')
+        print('正在统计选择，统计大概进行15秒，请耐心等待')
         choiceList = []
         for i in range(2):
             for x in danmu.getDanmu(roomid):
@@ -112,14 +110,16 @@ class danmu(object):
                     choiceList.append(choice)
             time.sleep(1)
         if len(choiceList) == 0:
-            return 1
+            print('因为样本数不足，所以默认选择第一个选项')
+            return 0
         else:
-            choice = Counter(choiceList)[0][0]
+            choice = Counter(choiceList)[0][0] - 1
+        print('大家选择了第' + str(choice+1) + '个选项')
         return choice
     
   
     def statsName(roomid):
-        print('正在统计名字,请在弹幕中发送以“名字”开头的弹幕，统计大概进行15秒，请耐心等待')
+        print('正在统计名字，统计大概进行15秒，请耐心等待')
         nameList = []
         for i in range(2):
             for x in danmu.getDanmu(roomid):
@@ -128,10 +128,12 @@ class danmu(object):
                     nameList.append(name)
             time.sleep(1)
         if len(nameList) == 0:
+            print('因为样本数不足，所以默认名字为凤凰院凶真')
             name = '凤凰院凶真'
             return name
         rand = random.randrange(0, len(nameList)-1)
         name = nameList[rand]
+        print('随机选择的名字是' + name)
         return name
     
             
@@ -190,7 +192,6 @@ class game(object):
     
     
     def choice(self, choice):
-        print('大家的选择是' + str(choice))
         js = 'game.userSelect(' + str(choice) + ')'
         self.driver.execute_script(js)
     
@@ -273,6 +274,7 @@ class game(object):
             self.driver.refresh()
             print('游戏结束,第' + str(i) + '号观测者死于' + death +'。该观测者成长到了' + str(age))
             print('文明的种子仍在，它将重新启动，再次开始在三体世界中命运莫测的进化，欢迎您再次登录。')
+            print('--------------------------------------------------------')
     
 try:
     i = 1
@@ -284,5 +286,6 @@ try:
             newGame.choice(0)
             time.sleep(1)
         newGame.gameOver(i)
+        i += 1
 except KeyboardInterrupt:
     print('程序已退出')
