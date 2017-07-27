@@ -180,7 +180,7 @@ class game(object):
     
     
     def getStatus(self):
-        #爬取目前状况，目前好像没用了。。
+        #爬取目前状况，目前好像没用了。。.
         name = self.driver.find_element_by_id('gameRoleName')
         age = self.driver.find_element_by_id('gameRoleAge')
         sex = self.driver.find_element_by_id('gameRoleSex')
