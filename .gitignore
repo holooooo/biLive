@@ -47,3 +47,5 @@ Temporary Items
 .apdisk
 debug.log
 *.log
+*.log
+!*.py
