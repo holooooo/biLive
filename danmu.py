@@ -92,11 +92,11 @@ class danmu(object):
     def checkDanmuCommand(self,command): 
         #处理弹幕数据，提出弹幕命令
         if command == 'choice':
-            if self.text.find('选择') != -1 and self.text[-1].isdigit():
+            if self.text[:2] == '选择' and self.text[-1].isdigit():
                 choice = int(self.text[-1]) - 1
                 return [self.nickname, choice]
         elif command == 'name':
-            if self.text.find('名字') != -1:
+            if self.text[:2] == '名字':
                 name = self.text[2:]
                 return [self.nickname, name]
         return None
@@ -105,23 +105,19 @@ class danmu(object):
     def stats(roomid,command):
         #统计弹幕命令，并且输出结果
         if command == 'choice':
-            print('正在统计选择，统计大概进行10秒，请耐心等待')
             choiceList = []
-            namePool = []
             for i in range(10):
                 for x in danmu.getDanmu(roomid):
                     choice = x.checkDanmuCommand('choice')
-                    if choice != None and choice[0] not in namePool:
-                        namePool.append(choice[0])
+                    if choice != None:
                         choiceList.append(choice[1])
                 time.sleep(1)
             if len(choiceList) == 0:
                 print('因为样本数不足，所以默认选择第一个选项')
                 return 0
-            for x in choiceList:
-                print('选择'+x)
-            choice = Counter(choiceList)[0][0] - 1
+            choice = list(Counter(choiceList))[0]
             print('大家选择了第' + str(choice+1) + '个选项')
+            choiceList = []
             return choice
         elif command == 'name':
             print('正在统计名字，统计大概进行15秒，请耐心等待')
@@ -138,11 +134,11 @@ class danmu(object):
                 print('因为样本数不足，所以默认名字为凤凰院凶真')
                 name = '凤凰院凶真'
                 return name
-            for x in nameList:
-                print('名字'+x)
             rand = random.randrange(0, len(nameList))
             name = nameList[rand]
             print('随机选择的名字是' + name)
+            nameList = []
+            namePool = []
             return name
         
             
@@ -205,9 +201,16 @@ class game(object):
     
     def choice(self):
         #选择事件函数
-        choice = danmu.stats(self.roomid, 'choice')
-        js = 'game.userSelect(' + str(choice) + ')'
-        self.driver.execute_script(js)
+        try:
+            happen = self.driver.find_element_by_id('happen').find_element_by_tag_name('h2').text
+            print('正在进行' + happen + '的统计。大概统计10秒，请耐心等待')
+            choice = danmu.stats(self.roomid, 'choice')
+            js = 'game.userSelect(' + str(choice) + ')'
+            self.driver.execute_script(js)
+        except:
+            print('当前事件执行失败，自动执行第一个选项')
+            js = 'game.userSelect(0)'
+            self.driver.execute_script(js)
     
    
     def gameStart(self, i):
@@ -298,7 +301,7 @@ class game(object):
 def main():
     try:
         i = 1
-        newGame = game(3742025)
+        newGame = game(348884)
         while 1:
             newGame.gameStart(i)
             while newGame.alive():

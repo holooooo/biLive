@@ -20,7 +20,4 @@
 
 死亡后，游戏会重新开始，并开始统计姓名，请时刻留意
 最右边的日志栏
-
-
-
 python -u code\python\bilive\danmu.py
